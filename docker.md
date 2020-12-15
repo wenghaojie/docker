@@ -305,4 +305,217 @@ docker commit -m="新镜像描述信息" -a="作者名" [镜像id] [目标镜像
 
 # 6.容器数据卷
 
+## 1.概念
 
+1. 需求：使数据持久化，容器数据不以容器的删除而丢失
+2. 卷技术：将docker容器中产生的数据同步到本地这就是卷技术
+3. 方法：目录挂载，将容器内的目录挂载到linux（主机）中
+4. 容器的持久化和同步操作！容器间也是可以数据共享的
+
+## 2.使用数据卷
+
+```shell
+-v										#使用-v命令挂载
+docker run -it -v [主机目录]:[容器内目录]   #挂载容器目录
+docker inspect [容器id]				   #查看其中的mount项看目录挂载是否成功
+docker volume							#查看所有的volume卷情况
+```
+
+## 3.具名和匿名挂载
+
+1. 匿名挂载：在挂载时只指定了容器内的路径未指定容器外路径
+
+2. 具名挂载：-v [卷名]:[容器内路径]
+
+```shell
+# 匿名挂载
+-v 容器内路径
+docker run -d -P --name nginx01 -v /etc/nginx nginx
+
+# 查看所有的volume的情况
+➜  ~ docker volume ls    
+DRIVER              VOLUME NAME
+local               33ae588fae6d34f511a769948f0d3d123c9d45c442ac7728cb85599c2657e50       
+# 这里发现，这种就是匿名挂载，我们在 -v只写了容器内的路径，没有写容器外的路径
+
+# 具名挂载
+➜  ~ docker run -d -P --name nginx02 -v juming-nginx:/etc/nginx nginx
+➜  ~ docker volume ls                  
+DRIVER              VOLUME NAME
+local               juming-nginx
+
+# 通过 -v 卷名：容器内路径
+# 查看一下这个卷
+```
+
+3. 所有的docker容器内的卷，没有指定挂载目录的情况下都是在/var/lib/docker/volumes下，如果指定了目录，docker volume ls 是查看不到的。
+4. 一般情况下我们都是具名挂载
+
+```shell
+-v [容器内路径]				#匿名挂载
+-v [卷名]:[容器内路径]		   #具名挂载
+-v [主机目录]:[容器内目录]	  #指定路径挂载docker volume ls 是查看不到的
+```
+
+## 4.拓展
+
+```shell
+# 通过 -v 容器内路径： ro rw 改变读写权限
+ro #readonly 只读
+rw #readwrite 可读可写
+docker run -d -P --name nginx05 -v juming:/etc/nginx:ro nginx
+docker run -d -P --name nginx05 -v juming:/etc/nginx:rw nginx
+# ro 只要看到ro就说明这个路径只能通过宿主机来操作，容器内部是无法操作！
+```
+
+## 7.数据卷容器
+
+数据卷容器指多个容器之间进行数据同步
+
+```shell
+docker run -it --name [新容器名] --volumes-from [父容器名] [镜像名]
+```
+
+注：容器之间的配置信息的传递，数据卷容器的生命周期一直持续到没有容器使用为止。但是一旦你持久化到了本地，这个时候，本地的数据是不会删除的！
+
+# 7.Dockerfile
+
+## 1.Dockerfile介绍
+
+dockerfile是用来构建docker镜像的文件！
+
+构建步骤：
+
+1. 编写dockerfile文件
+2. 使用docker build构建一个镜像
+3. 使用docker run运行镜像
+4. 使用docker pull发布镜像 
+
+很多官方镜像都是基础包，很多功能是没有的，因此通常我们需要自己构建镜像
+
+## 2.Dockerfilre构建过程
+
+### 1.基础知识
+
+1. 每个保留关键字(指令)必须使用大写字母
+2. 执行是从上到下顺序执行
+3. #表示注释
+4. 每个指令都会创建提交一个新的镜像层并提交
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200704150706618.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzQxODIyMzQ1,size_16,color_FFFFFF,t_70)
+
+### 2.Dockerfile指令
+
+```shell
+常用指令
+FROM			#基础镜像，一切从这里开始构建，如：FROM centos
+MAINTAINER		#镜像是书写的，姓名+邮箱
+RUN				#镜像构建时需要运行的命令
+ADD				#步骤，如tomcat镜像，这个tomcat压缩包！添加内容 添加同目录
+WORKDIR			#镜像工作目录
+VOLUME			#挂载目录
+EXPOST			#保留端口配置（暴露端口）
+CMD				#指定容器启动时运行的命令，只有最后一个命令生效
+ENTRYPOTNT		#指定容器启动时运行的命令，可追加命令
+ONBUILD			#当构建一个被继承 DockerFile 这个时候就会运行ONBUILD的指令，触发指令。
+COPY			#类似ADD，将文件拷贝到镜像中
+ENV				#构建时设置环境变量
+docker history [镜像id]		#列出镜像变更历史
+```
+
+## 3.实战
+
+### 1.创建一个自己的centos
+
+```shell
+# 1.编写Dockerfile文件
+vim mydockerfile-centos
+FROM centos
+MAINTAINER cheng<1204598429@qq.com>
+
+ENV MYPATH /usr/local
+WORKDIR $MYPATH
+
+RUN yum -y install vim
+RUN yum -y install net-tools
+
+EXPOSE 80
+
+CMD echo $MYPATH
+CMD echo "-----end----"
+CMD /bin/bash
+```
+
+```shell
+# 2、通过这个文件构建镜像
+# 命令 docker build -f [文件名] -t [镜像名]:[tag] .
+docker build -f mydockerfile-centos -t mycentos:0.1 .
+```
+
+### 2.Tomcat镜像
+
+1. 准备镜像文件
+
+准备tomcat 和 jdk压缩包，上传到linux中，编写好README文件(帮助文档，可不写) 。
+
+2. 编写dockerfile文件，官方命名` Dockerfile`,使用官方命名在在build时可不用指定-f [文件名]，它会自动寻找
+
+```shell 
+FROM centos
+MAINTAINER cheng<1204598429@qq.com>
+COPY README /usr/local/README                    #复制文件
+ADD jdk-8u231-linux-x64.tar.gz /usr/local/       #复制镜像并解压
+ADD apache-tomcat-9.0.35.tar.gz /usr/local/      #复制镜像并解压
+RUN yum -y install vim
+ENV MYPATH /usr/local                             #设置环境变量
+WORKDIR $MYPATH                                   #设置工作目录
+ENV JAVA_HOME /usr/local/jdk1.8.0_231             #设置环境变量
+ENV CATALINA_HOME /usr/local/apache-tomcat-9.0.35 #设置环境变量
+ENV PATH $PATH:$JAVA_HOME/bin:$CATALINA_HOME/lib  #设置环境变量 分隔符是：
+EXPOSE 8080                                       #设置暴露的端口
+CMD /usr/local/apache-tomcat-9.0.35/bin/startup.sh && tail -F /usr/local/apache-tomcat-9.0.35/logs/catalina.out                          # 设置默认命令
+
+```
+
+3. 构建镜像
+
+```shell
+# 因为dockerfile命名使用默认命名 因此不用使用-f 指定文件
+$ docker build -t mytomcat:0.1 .
+```
+
+4. run镜像
+
+```shell
+$ docker run -d -p 8080:8080 --name tomcat01 -v /home/kuangshen/build/tomcat/test:/usr/local/apache-tomcat-9.0.35/webapps/test -v /home/kuangshen/build/tomcat/tomcatlogs/:/usr/local/apache-tomcat-9.0.35/logs mytomcat:0.1
+```
+
+5. 访问测试
+
+6. 发布项目(由于做了卷挂载，我们直接在本地编写项目就可以发布了！)
+
+## 4.发布镜像
+
+### 1.发布镜像到dockerhub
+
+1. 注册并登录dockerhub官网
+2. 在服务器上提交自己的镜像
+
+```shell
+#登录
+docker login -p [dockerhub官网账号密码] -u [dockerhub官网账号用户名]
+#提交镜像
+docker push [作者名]/[要提交的镜像名]:[版本号]
+```
+
+### 2.发布镜像到阿里云上
+
+1. 登录阿里云
+2. 找到容器镜像服务
+3. 创建命名空间
+4. 创建容器镜像（镜像仓库）
+5. 上传镜像，参考阿里云官方文档很详细https://cr.console.aliyun.com/repository/
+
+## 5.小结
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200704150831579.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzQxODIyMzQ1,size_16,color_FFFFFF,t_70)
