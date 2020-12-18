@@ -103,7 +103,7 @@ yum install -y yum-utils
 4.更新yum软件包索引
 
 ```shell
-yum makecache fast
+    yum makecache fast
 ```
 
 5.安装docker（ce社区版，ee企业版）
@@ -519,3 +519,316 @@ docker push [作者名]/[要提交的镜像名]:[版本号]
 ## 5.小结
 
 ![在这里插入图片描述](https://img-blog.csdnimg.cn/20200704150831579.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3FxXzQxODIyMzQ1,size_16,color_FFFFFF,t_70)
+
+# 8.Doocker网络
+
+## 1.理解docker0
+
+### 1.查看安装了docker的主机上的网络
+
+```shell
+[root@hecs-x-medium-2-linux-20201216095547 ~]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether fa:16:3e:6f:50:b1 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.0.202/24 brd 192.168.0.255 scope global noprefixroute dynamic eth0
+       valid_lft 59862sec preferred_lft 59862sec
+    inet6 fe80::f816:3eff:fe6f:50b1/64 scope link 
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default 
+    link/ether 02:42:c4:e3:42:40 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:c4ff:fee3:4240/64 scope link 
+       valid_lft forever preferred_lft forever
+#我们发现有本机有三个网络
+l0：		 本机回环地址
+eth0：    本机内网地址
+docker0： docker地址
+```
+
+### 2.查看容器内部网络地址,我们发现容器启动得到一个eth0@if49地址
+
+```shell
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker run -it --name centos2 centos
+[root@b491eaf50aaf /]# ipadddr
+bash: ipadddr: command not found
+[root@b491eaf50aaf /]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+48: eth0@if49: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:ac:11:00:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+[root@hecs-x-medium-2-linux-20201216095547 ~]# ping 172.17.0.2
+PING 172.17.0.2 (172.17.0.2) 56(84) bytes of data.
+64 bytes from 172.17.0.2: icmp_seq=1 ttl=64 time=0.057 ms
+64 bytes from 172.17.0.2: icmp_seq=2 ttl=64 time=0.042 ms
+64 bytes from 172.17.0.2: icmp_seq=3 ttl=64 time=0.046 ms
+64 bytes from 172.17.0.2: icmp_seq=4 ttl=64 time=0.039 ms
+#通过主机是可以ping通docker容器的
+```
+
+```shell
+[root@hecs-x-medium-2-linux-20201216095547 ~]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether fa:16:3e:6f:50:b1 brd ff:ff:ff:ff:ff:ff
+    inet 192.168.0.202/24 brd 192.168.0.255 scope global noprefixroute dynamic eth0
+       valid_lft 58637sec preferred_lft 58637sec
+    inet6 fe80::f816:3eff:fe6f:50b1/64 scope link 
+       valid_lft forever preferred_lft forever
+3: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:c4:e3:42:40 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:c4ff:fee3:4240/64 scope link 
+       valid_lft forever preferred_lft forever
+49: veth82d7ca1@if48: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default 
+    link/ether 5a:3a:ac:15:e1:7c brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet6 fe80::583a:acff:fe15:e17c/64 scope link 
+       valid_lft forever preferred_lft forever
+```
+
+### 3.原理：
+
+1. 我们没启动一个docker容器，docker就会给docker容器分配一个ip，只要我们安装docker，就会有一个docker0网卡，桥接模式，使用的是ecth-pair技术
+2. 我们发现生成的容器网卡都是一对一对的
+3. evth-pair充当桥梁，连接各种虚拟网络设备
+4. openstac、docker容器之间的网络连接，ovs的连接，都使用的是evth-pair技术
+5. 所有容器不指定网络情况下，都是docker0作为路由，docker会给我们容器分配一个默认可用的ip
+6. docker中所有的网络接口都是虚拟的，虚拟网络转发率高
+7. 只有当容器被删除，对应的一对网桥也就没了
+
+思考：项目不重启，数据库ip地址改变，我们访问容器的IP地址是否也要改变？我们是否可以用名字来访问容器，这样无论ip如何变化，都不影响我们访问容器。
+
+## 2.--link
+
+通过--link可以解决容器之间网络连通问题
+
+```shell
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker run -it --name centos4 --link centos2 centos
+[root@04c563284c71 /]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+52: eth0@if53: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:ac:11:00:03 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.3/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+[root@04c563284c71 /]# ^C
+#在centos2上ping centos4发现可以ping通，但centos4 ping不通centos2
+[root@b491eaf50aaf /]# ping 172.17.0.3
+PING 172.17.0.3 (172.17.0.3) 56(84) bytes of data.
+64 bytes from 172.17.0.3: icmp_seq=1 ttl=64 time=0.078 ms
+64 bytes from 172.17.0.3: icmp_seq=2 ttl=64 time=0.062 ms
+^C
+--- 172.17.0.3 ping statistics ---
+#查看centos2上的hosts文件，多了一个172.17.0.2	b491eaf50aaf配置
+[root@b491eaf50aaf /]# cat /etc/hosts 
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::0	ip6-localnet
+ff00::0	ip6-mcastprefix
+ff02::1	ip6-allnodes
+ff02::2	ip6-allrouters
+172.17.0.2	b491eaf50aaf
+[root@b491eaf50aaf /]# 
+```
+
+通过--link技术无法实现容器名连接访问，我们一般不建议使用--link技术去实现容器间的访问
+
+## 3.自定义网络
+
+通常使用此模式实现容器互连
+
+```shell
+#查看所有docker网络
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+5b68ddb1c185   bridge    bridge    local
+cc9723858c9d   host      host      local
+ad8a7f493e34   none      null      local
+[root@hecs-x-medium-2-linux-20201216095547 ~]# 
+# bridge：桥接（默认）  none：不配置网络   host：和宿主机共享网络  container：容器内网络连接（用的少）
+```
+
+命令
+
+```shell
+--driver brige			 #定义模式（默认桥接）
+--subnet 192.168.0.0/16  #定义ip
+--gateway 192.168.0.1				 #定义网关
+```
+
+```shell
+#创建一个名为mymet的网络
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker network create --driver bridge --subnet 192.168.0.0/16 --gateway 192.168.0.1 mymet
+fc7402c6f30decc1c065dc98a6bcb9e95cb36af3e071800eff2d23d2bbbec890
+#使用docker network ls查看是否创建成功
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker network ls
+NETWORK ID     NAME      DRIVER    SCOPE
+5b68ddb1c185   bridge    bridge    local
+cc9723858c9d   host      host      local
+fc7402c6f30d   mymet     bridge    local
+ad8a7f493e34   none      null      local
+#使用docker network inspect mymet查看其具体内容是否和我们创建的一致
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker network inspect mymet
+[
+    {
+        "Name": "mymet",
+        "Id": "fc7402c6f30decc1c065dc98a6bcb9e95cb36af3e071800eff2d23d2bbbec890",
+        "Created": "2020-12-18T11:07:12.00039337+08:00",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": {},
+            "Config": [
+                {
+                    "Subnet": "192.168.0.0/16",
+                    "Gateway": "192.168.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Containers": {},
+        "Options": {},
+        "Labels": {}
+    }
+]
+#使用--net命令创建两个容器
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker run -it --name centos1 --net mymet centos
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker run -it --name centos2 --net mymet centos
+#查看各自的ip地址
+[root@318e95ba3efb /]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+57: eth0@if58: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:c0:a8:00:03 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 192.168.0.3/16 brd 192.168.255.255 scope global eth0
+       valid_lft forever preferred_lft forever 
+[root@a4cf1d734a4e /]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+55: eth0@if56: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:c0:a8:00:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 192.168.0.2/16 brd 192.168.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+#通过ip及容器名互ping，发现是没有任何问题的
+[root@a4cf1d734a4e /]# ping 192.168.0.3
+PING 192.168.0.3 (192.168.0.3) 56(84) bytes of data.
+64 bytes from 192.168.0.3: icmp_seq=1 ttl=64 time=0.071 ms
+64 bytes from 192.168.0.3: icmp_seq=2 ttl=64 time=0.064 ms
+^C
+--- 192.168.0.3 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1000ms
+rtt min/avg/max/mdev = 0.064/0.067/0.071/0.008 ms
+[root@a4cf1d734a4e /]# ping centos2    
+PING centos2 (192.168.0.3) 56(84) bytes of data.
+64 bytes from centos2.mymet (192.168.0.3): icmp_seq=1 ttl=64 time=0.036 ms
+64 bytes from centos2.mymet (192.168.0.3): icmp_seq=2 ttl=64 time=0.050 ms
+^C
+--- centos2 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1ms
+rtt min/avg/max/mdev = 0.036/0.043/0.050/0.007 ms
+[root@318e95ba3efb /]# ping 192.168.0.2
+PING 192.168.0.2 (192.168.0.2) 56(84) bytes of data.
+64 bytes from 192.168.0.2: icmp_seq=1 ttl=64 time=0.066 ms
+64 bytes from 192.168.0.2: icmp_seq=2 ttl=64 time=0.050 ms
+^C
+--- 192.168.0.2 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 999ms
+rtt min/avg/max/mdev = 0.050/0.058/0.066/0.008 ms
+[root@318e95ba3efb /]# ping centos1    
+PING centos1 (192.168.0.2) 56(84) bytes of data.
+64 bytes from centos1.mymet (192.168.0.2): icmp_seq=1 ttl=64 time=0.037 ms
+64 bytes from centos1.mymet (192.168.0.2): icmp_seq=2 ttl=64 time=0.048 ms
+```
+
+## 4.网络连通
+
+连通一个其他网卡的容器到创建的网卡，使其可以与此网卡上的容器互联
+
+```shell
+#创建一个新的容器，不指定网卡使用默认的docker0网卡
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker run -it --name centos3 centos
+[root@aa8227884309 /]# ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+59: eth0@if60: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:ac:11:00:02 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
+#ping mymnt网卡上的容器时发现无法ping通
+[root@aa8227884309 /]# ping 192.168.0.3
+PING 192.168.0.3 (192.168.0.3) 56(84) bytes of data.
+From 192.168.0.202 icmp_seq=1 Destination Host Unreachable
+From 192.168.0.202 icmp_seq=2 Destination Host Unreachable
+From 192.168.0.202 icmp_seq=3 Destination Host Unreachable
+#使用connect命令将新容器连接到mymet网卡
+[root@hecs-x-medium-2-linux-20201216095547 ~]# docker network connect mymet centos3
+#测试，发现已经可以与mymet上的容器相互通信
+[root@aa8227884309 /]# ping 192.168.0.3
+PING 192.168.0.3 (192.168.0.3) 56(84) bytes of data.
+64 bytes from 192.168.0.3: icmp_seq=1 ttl=64 time=0.068 ms
+64 bytes from 192.168.0.3: icmp_seq=2 ttl=64 time=0.051 ms
+^C
+--- 192.168.0.3 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1000ms
+rtt min/avg/max/mdev = 0.051/0.059/0.068/0.011 ms
+[root@aa8227884309 /]# ping centos1    
+PING centos1 (192.168.0.2) 56(84) bytes of data.
+64 bytes from centos1.mymet (192.168.0.2): icmp_seq=1 ttl=64 time=0.053 ms
+64 bytes from centos1.mymet (192.168.0.2): icmp_seq=2 ttl=64 time=0.055 ms
+^C
+--- centos1 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1000ms
+rtt min/avg/max/mdev = 0.053/0.054/0.055/0.001 ms
+#mymnt上的容器也可ping通此容器
+[root@a4cf1d734a4e /]# ping centos3
+PING centos3 (192.168.0.4) 56(84) bytes of data.
+64 bytes from centos3.mymet (192.168.0.4): icmp_seq=1 ttl=64 time=0.034 ms
+64 bytes from centos3.mymet (192.168.0.4): icmp_seq=2 ttl=64 time=0.053 ms
+^C
+--- centos3 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1ms
+rtt min/avg/max/mdev = 0.034/0.043/0.053/0.011 ms
+#这种连接模式可称为一个容器两个ip
+```
+
+## 5.springboot微服务打包docker镜像
+
+步骤：
+
+1. 构建springboot项目
+2. 打包应用
+3. 编写dockerfile
+4. 构建镜像
+5. 发布运行
