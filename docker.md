@@ -4,7 +4,7 @@
 
 （2）spingboot（非必要）
 
-## 2.docker学习
+## 1.docker学习
 
 * Docker概述
 
@@ -276,6 +276,8 @@ docker stats 							 #查看cpu状态
    ```
 
 3. portainer docker图形化界面管理工具
+
+![img](https://ss1.bdstatic.com/70cFvXSh_Q1YnxGkpoWK1HF6hhy/it/u=3467122840,3410989387&fm=26&gp=0.jpg)
 
 # 5.Docker镜像
 
@@ -832,3 +834,100 @@ rtt min/avg/max/mdev = 0.034/0.043/0.053/0.011 ms
 3. 编写dockerfile
 4. 构建镜像
 5. 发布运行
+
+# 9.Docker-compose
+
+## 1.简介
+
+docker-compose 轻松管理多个容器，定义运行多个容器
+
+作用：批量容器编排
+
+compose是docker的开源项目，需要安装
+
+dockerfile让程序在任何地方运行
+
+学习可参考官方文档：https://docs.docker.com/compose/
+
+## 2.安装compose
+
+1. 下载
+
+```shell
+sudo curl -L "https://github.com/docker/compose/releases/download/1.27.4/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+#官方地址下载太慢，我们可以百度其他地址来下载
+```
+
+2. 授权
+
+```shell
+chmod +x /use/local/bin/docker-compose
+```
+
+3. 验证
+
+```shell
+docker-compose version
+```
+
+## 3.步骤
+
+1. 创建docker-compose目录
+2. 创建dockerfils文件（可不创建）
+3. 创建docker-compose.yml文件
+4. 启动compose项目(docker-compose up)
+
+运行compose后，会创建一个compose网络，因此项目中的内容都在同一个网络下，可以互相访问
+
+5. 停止compose（docker-compose down）
+
+## 4.yml文件
+
+可大致分为3层
+
+1. version：' '   	#版本
+
+2. service：          #服务
+
+    			服务1： 
+
+   ​			服务2：
+
+   ​         服务配置
+
+   ​           如：images： build：network等
+
+3. 其他配置，如：网络/卷，全局规则等
+
+```shell
+#例：docker-compose.yml文件
+version: '3.3'
+
+services:
+   db:
+     image: mysql:5.7
+     volumes:
+       - db_data:/var/lib/mysql
+     restart: always
+     environment:
+       MYSQL_ROOT_PASSWORD: somewordpress
+       MYSQL_DATABASE: wordpress
+       MYSQL_USER: wordpress
+       MYSQL_PASSWORD: wordpress
+
+   wordpress:
+     depends_on:
+       - db
+     image: wordpress:latest
+     ports:
+       - "8000:80"
+     restart: always
+     environment:
+       WORDPRESS_DB_HOST: db:3306
+       WORDPRESS_DB_USER: wordpress
+       WORDPRESS_DB_PASSWORD: wordpress
+       WORDPRESS_DB_NAME: wordpress
+volumes:
+    db_data: {}
+```
+
